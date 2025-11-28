@@ -134,9 +134,9 @@ export interface UtilityClassesPluginOptions {
 /**
  * Vite plugin for automatic utility classes generation from *.ui_styles.yml files
  */
-export default function vitePluginUtilityClasses(options: UtilityClassesPluginOptions = {}): Plugin {
+export default function vitePluginUiStyles(options: UtilityClassesPluginOptions = {}): Plugin {
   return {
-    name: 'vite-plugin-utility-classes',
+    name: 'vite-plugin-ui-styles',
     
     async load(id: string) {
       if (!id.endsWith('.ui_styles.yml')) return
@@ -161,7 +161,7 @@ export default function vitePluginUtilityClasses(options: UtilityClassesPluginOp
 }
 
 // Indexer for UI Styles YAML files
-export const utilityClassesIndexer: Indexer = {
+export const uiStylesIndexer: Indexer = {
   test: /\.ui_styles\.yml$/,
   createIndex: async (fileName, { makeTitle }) => {
     try {

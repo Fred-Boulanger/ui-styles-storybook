@@ -30,7 +30,7 @@ To use the plugin, you need to configure three things in your Storybook configur
 
 ```typescript
 // .storybook/main.ts
-import { vitePluginUtilityClasses, utilityClassesIndexer } from '@fredboulanger/ui-styles-storybook/main'
+import { vitePluginUiStyles, uiStylesIndexer } from '@fredboulanger/ui-styles-storybook/main'
 import type { StorybookConfig } from '@storybook/html-vite'
 
 const config: StorybookConfig = {
@@ -41,11 +41,11 @@ const config: StorybookConfig = {
   // ... other config
   viteFinal: (config) => ({
     ...config,
-    plugins: [...(config.plugins || []), vitePluginUtilityClasses()],
+    plugins: [...(config.plugins || []), vitePluginUiStyles()],
   }),
   experimental_indexers: async (existingIndexers) => [
     ...(existingIndexers || []),
-    utilityClassesIndexer,
+    uiStylesIndexer,
   ],
 }
 
@@ -56,7 +56,7 @@ Or for JavaScript configuration:
 
 ```javascript
 // .storybook/main.js
-import { vitePluginUtilityClasses, utilityClassesIndexer } from '@fredboulanger/ui-styles-storybook/main'
+import { vitePluginUiStyles, uiStylesIndexer } from '@fredboulanger/ui-styles-storybook/main'
 
 export default {
   stories: [
@@ -66,11 +66,11 @@ export default {
   // ... other config
   viteFinal: (config) => ({
     ...config,
-    plugins: [...(config.plugins || []), vitePluginUtilityClasses()],
+    plugins: [...(config.plugins || []), vitePluginUiStyles()],
   }),
   experimental_indexers: async (existingIndexers) => [
     ...(existingIndexers || []),
-    utilityClassesIndexer,
+    uiStylesIndexer,
   ],
 }
 ```
@@ -81,14 +81,14 @@ If you're using namespaces in your Storybook configuration, you can pass them to
 
 ```typescript
 // .storybook/main.ts
-import { vitePluginUtilityClasses } from '@fredboulanger/ui-styles-storybook/main'
+import { vitePluginUiStyles } from '@fredboulanger/ui-styles-storybook/main'
 import { resolve } from 'path'
 
 export default {
   // ... other config
   viteFinal: (config) => ({
     ...config,
-    plugins: [...(config.plugins || []), vitePluginUtilityClasses({
+    plugins: [...(config.plugins || []), vitePluginUiStyles({
       namespaces: {
         'custom-theme': resolve('../../../themes/custom/custom-theme'),
         'base-theme': resolve('../../../themes/custom/base-theme'),

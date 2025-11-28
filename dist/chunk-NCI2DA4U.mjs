@@ -347,9 +347,9 @@ var generateUtilityClassesStory = (filePath) => {
     throw error;
   }
 };
-function vitePluginUtilityClasses(options = {}) {
+function vitePluginUiStyles(options = {}) {
   return {
-    name: "vite-plugin-utility-classes",
+    name: "vite-plugin-ui-styles",
     async load(id) {
       if (!id.endsWith(".ui_styles.yml")) return;
       try {
@@ -367,7 +367,7 @@ function vitePluginUtilityClasses(options = {}) {
     }
   };
 }
-var utilityClassesIndexer = {
+var uiStylesIndexer = {
   test: /\.ui_styles\.yml$/,
   createIndex: async (fileName, { makeTitle }) => {
     try {
@@ -429,7 +429,7 @@ export {
   generateUtilityClassesCSS,
   generateUtilityClassesFromYaml,
   logger,
-  vitePluginUtilityClasses,
-  utilityClassesIndexer
+  vitePluginUiStyles,
+  uiStylesIndexer
 };
-//# sourceMappingURL=chunk-FVENPEXG.mjs.map
+//# sourceMappingURL=chunk-NCI2DA4U.mjs.map

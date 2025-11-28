@@ -10,7 +10,7 @@ interface UtilityClassesPluginOptions {
 /**
  * Vite plugin for automatic utility classes generation from *.ui_styles.yml files
  */
-declare function vitePluginUtilityClasses(options?: UtilityClassesPluginOptions): Plugin;
-declare const utilityClassesIndexer: Indexer;
+declare function vitePluginUiStyles(options?: UtilityClassesPluginOptions): Plugin;
+declare const uiStylesIndexer: Indexer;
 
-export { type UtilityClassesPluginOptions as U, utilityClassesIndexer as u, vitePluginUtilityClasses as v };
+export { type UtilityClassesPluginOptions as U, uiStylesIndexer as u, vitePluginUiStyles as v };

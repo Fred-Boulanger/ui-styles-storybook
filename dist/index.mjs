@@ -10,9 +10,9 @@ import {
   generateUtilityClassesStories,
   logger,
   parseUtilityClassesYaml,
-  utilityClassesIndexer,
-  vitePluginUtilityClasses
-} from "./chunk-FVENPEXG.mjs";
+  uiStylesIndexer,
+  vitePluginUiStyles
+} from "./chunk-NCI2DA4U.mjs";
 
 // src/utils.ts
 var capitalize = (str) => str[0].toUpperCase() + str.slice(1);
@@ -28,7 +28,7 @@ export {
   generateUtilityClassesStories,
   logger,
   parseUtilityClassesYaml,
-  utilityClassesIndexer,
-  vitePluginUtilityClasses
+  uiStylesIndexer,
+  vitePluginUiStyles
 };
 //# sourceMappingURL=index.mjs.map
