@@ -278,40 +278,13 @@ var logger = {
 };
 
 // src/vite-plugin-utility-classes.ts
-import { readFileSync as readFileSync2, writeFileSync, existsSync, unlinkSync } from "fs";
-import { join as join2 } from "path";
+import { readFileSync as readFileSync2 } from "fs";
 import { parse as parseYaml2 } from "yaml";
-import { globSync } from "glob";
-var findUtilityStyleFiles = (rootDir, namespaces) => {
-  try {
-    const files = [];
-    const pattern = join2(rootDir, "**", "*.ui_styles.yml");
-    const currentFiles = globSync(pattern);
-    files.push(...currentFiles);
-    if (namespaces) {
-      for (const [namespaceName, namespacePath] of Object.entries(namespaces)) {
-        try {
-          const namespacePattern = join2(namespacePath, "**", "*.ui_styles.yml");
-          const namespaceFiles = globSync(namespacePattern);
-          files.push(...namespaceFiles);
-          logger.info(`\u{1F50D} Found ${namespaceFiles.length} utility style file(s) in namespace '${namespaceName}'`);
-        } catch (error) {
-          logger.warn(`\u26A0\uFE0F  Could not search in namespace '${namespaceName}': ${namespacePath}`);
-        }
-      }
-    }
-    return files;
-  } catch (error) {
-    logger.warn(`Error searching for *.ui_styles.yml files: ${error}`);
-    return [];
-  }
-};
 var isUtilityDefinition = (value) => {
   return value && typeof value === "object" && typeof value.options === "object" && value.options !== null;
 };
-var deriveNamespaceFromPath = (rootDir, yamlPath) => {
-  const rel = yamlPath.startsWith(rootDir) ? yamlPath.slice(rootDir.length + 1) : yamlPath;
-  const parts = rel.split("/");
+var deriveNamespaceFromPath = (yamlPath) => {
+  const parts = yamlPath.split("/");
   if (parts.length > 1) {
     return parts[parts.length - 2];
   }
@@ -328,136 +301,122 @@ var isConfigDisabled = (config) => {
   const topLevel = config?.utilityClasses || {};
   return config?.enabled === false || utilityClassesA?.enabled === false || utilityClassesB?.enabled === false || topLevel?.enabled === false || disableA === true || disableB === true || config?.disableUtilityClasses === true;
 };
+var generateUtilityClassesStory = (filePath) => {
+  try {
+    if (!filePath.endsWith(".ui_styles.yml")) {
+      return "";
+    }
+    const fileContent = readFileSync2(filePath, "utf8");
+    const config = parseYaml2(fileContent);
+    if (isConfigDisabled(config)) {
+      logger.info(`Skipping utility classes generation for disabled file: ${filePath}`);
+      return "";
+    }
+    const utilities = Object.entries(config).filter(([, value]) => isUtilityDefinition(value));
+    if (utilities.length === 0) {
+      logger.info(`No utility definitions found in ${filePath}`);
+      return "";
+    }
+    const namespace = deriveNamespaceFromPath(filePath);
+    const tps = config?.thirdPartySettings || {};
+    const sdcStorybook = tps?.sdcStorybook || {};
+    const globalTags = Array.isArray(sdcStorybook?.tags) ? sdcStorybook.tags : [];
+    const hasAutodocs = globalTags.includes("autodocs");
+    const cssContent = generateUtilityClassesCSS();
+    let storiesContent;
+    if (hasAutodocs) {
+      const docsContent = generateAutodocsContent(utilities);
+      storiesContent = generateBaseStoryStructure(
+        "// Auto-generated utility classes documentation",
+        docsContent,
+        filePath,
+        namespace
+      );
+    } else {
+      const stories = generateIndividualStoriesContent(utilities, namespace);
+      storiesContent = generateBaseStoryStructure(
+        "// Auto-generated utility classes stories",
+        stories,
+        filePath,
+        namespace
+      );
+    }
+    return storiesContent;
+  } catch (error) {
+    logger.error(`Error generating utility classes story from ${filePath}: ${error}`);
+    throw error;
+  }
+};
 function vitePluginUtilityClasses(options = {}) {
-  const {
-    outputDir,
-    namespaces,
-    generateOnStart = true,
-    watch = true
-  } = options;
-  let hasGenerated = false;
-  const generateUtilityClasses = () => {
-    const rootDir = process.cwd();
-    const finalOutputDir = outputDir || join2(rootDir, "stories");
-    const yamlFiles = findUtilityStyleFiles(rootDir, namespaces);
-    if (yamlFiles.length === 0) {
-      logger.warn(`No *.ui_styles.yml files found in project`);
-      return;
-    }
-    try {
-      logger.info(`Found ${yamlFiles.length} utility style file(s): ${yamlFiles.join(", ")}`);
-      const legacyStoriesPath = join2(finalOutputDir, "utility-classes.stories.js");
-      if (existsSync(legacyStoriesPath)) {
-        try {
-          unlinkSync(legacyStoriesPath);
-        } catch {
-        }
-      }
-      let numGenerated = 0;
-      let wroteCss = false;
-      yamlFiles.forEach((yamlPath) => {
-        if (!existsSync(yamlPath)) return;
-        const fileContent = readFileSync2(yamlPath, "utf8");
-        const config = parseYaml2(fileContent);
-        if (isConfigDisabled(config)) {
-          logger.info(`Skipping utility classes generation for disabled file: ${yamlPath}`);
-          const ns = deriveNamespaceFromPath(rootDir, yamlPath);
-          const perFileStoriesPath = join2(finalOutputDir, `utility-classes.${ns}.stories.js`);
-          try {
-            if (existsSync(perFileStoriesPath)) unlinkSync(perFileStoriesPath);
-          } catch {
-          }
-          return;
-        }
-        const utilities = Object.entries(config).filter(([, value]) => isUtilityDefinition(value));
-        if (utilities.length === 0) {
-          logger.info(`No utility definitions found in ${yamlPath}`);
-          return;
-        }
-        const namespace = deriveNamespaceFromPath(rootDir, yamlPath);
-        const tps = config?.thirdPartySettings || {};
-        const sdcStorybook = tps?.sdcStorybook || {};
-        const globalTags = Array.isArray(sdcStorybook?.tags) ? sdcStorybook.tags : [];
-        const hasAutodocs = globalTags.includes("autodocs");
-        let storiesContent;
-        if (hasAutodocs) {
-          const docsContent = generateAutodocsContent(utilities);
-          storiesContent = generateBaseStoryStructure(
-            "// Auto-generated utility classes documentation",
-            docsContent,
-            yamlPath,
-            namespace
-          );
-        } else {
-          const stories = generateIndividualStoriesContent(utilities, namespace);
-          storiesContent = generateBaseStoryStructure(
-            "// Auto-generated utility classes stories",
-            stories,
-            yamlPath,
-            namespace
-          );
-        }
-        const storiesPath = join2(finalOutputDir, `utility-classes.${namespace}.stories.js`);
-        writeFileSync(storiesPath, storiesContent, "utf8");
-        numGenerated += 1;
-        logger.info(`\u2705 Generated utility classes stories: ${storiesPath}`);
-        if (!wroteCss) {
-          const cssContent = generateUtilityClassesCSS();
-          const cssPath = join2(finalOutputDir, "utility-classes.css");
-          writeFileSync(cssPath, cssContent, "utf8");
-          logger.info(`\u2705 Generated utility classes CSS: ${cssPath}`);
-          wroteCss = true;
-        }
-      });
-      if (numGenerated === 0) {
-        logger.warn(`No valid utility style configurations found`);
-        const cssPath = join2(finalOutputDir, "utility-classes.css");
-        try {
-          if (existsSync(cssPath)) unlinkSync(cssPath);
-        } catch {
-        }
-      } else {
-        logger.info(`\u2705 Processed ${numGenerated} utility style file(s) individually`);
-      }
-    } catch (error) {
-      logger.error(`\u274C Failed to generate utility classes stories: ${error}`);
-      throw error;
-    }
-  };
   return {
     name: "vite-plugin-utility-classes",
-    buildStart() {
-      if (generateOnStart && !hasGenerated) {
-        try {
-          generateUtilityClasses();
-          hasGenerated = true;
-        } catch (error) {
-          logger.warn("Failed to generate utility classes on build start:", error);
-        }
-      }
-    },
     async load(id) {
-      if (id.endsWith("component.yml") && !hasGenerated) {
-        try {
-          generateUtilityClasses();
-          hasGenerated = true;
-        } catch (error) {
-          logger.warn("Failed to generate utility classes:", error);
+      if (!id.endsWith(".ui_styles.yml")) return;
+      try {
+        logger.info(`Processing utility classes file: ${id}`);
+        const storyContent = generateUtilityClassesStory(id);
+        if (!storyContent) {
+          logger.info(`No story content generated for ${id}`);
+          return "";
         }
-      }
-    },
-    async handleHotUpdate({ file }) {
-      if (watch && file.endsWith(".ui_styles.yml")) {
-        try {
-          generateUtilityClasses();
-          logger.info("\u{1F3A8} Utility classes regenerated due to file change:", file);
-        } catch (error) {
-          logger.warn("Failed to regenerate utility classes:", error);
-        }
+        return storyContent;
+      } catch (error) {
+        logger.error(`Error loading utility classes file: ${id}, ${error}`);
+        throw error;
       }
     }
   };
 }
+var utilityClassesIndexer = {
+  test: /\.ui_styles\.yml$/,
+  createIndex: async (fileName, { makeTitle }) => {
+    try {
+      const content = parseYaml2(readFileSync2(fileName, "utf8"));
+      if (isConfigDisabled(content)) {
+        logger.info(`Utility classes file ${fileName} is disabled, skipping index`);
+        return [];
+      }
+      const utilities = Object.entries(content).filter(([, value]) => isUtilityDefinition(value));
+      if (utilities.length === 0) {
+        return [];
+      }
+      const namespace = deriveNamespaceFromPath(fileName);
+      const tps = content?.thirdPartySettings || {};
+      const sdcStorybook = tps?.sdcStorybook || {};
+      const globalTags = Array.isArray(sdcStorybook?.tags) ? sdcStorybook.tags : [];
+      const hasAutodocs = globalTags.includes("autodocs");
+      const tags = ["utility-classes"];
+      if (hasAutodocs) {
+        const baseTitle = makeTitle(`${namespace}/Utility Classes`);
+        return [{
+          type: "story",
+          importPath: fileName,
+          exportName: "Docs",
+          title: baseTitle,
+          tags: [...tags, "autodocs"]
+        }];
+      } else {
+        return utilities.map(([groupKey, definition]) => {
+          if (definition.enabled === false) {
+            return null;
+          }
+          const { category, label } = definition;
+          const baseTitle = makeTitle(`${namespace}/Utility Classes/${category}/${label}`);
+          return {
+            type: "story",
+            importPath: fileName,
+            exportName: groupKey,
+            title: baseTitle,
+            tags
+          };
+        }).filter(Boolean);
+      }
+    } catch (error) {
+      logger.error(`Error creating index for utility classes file: ${fileName}, ${error}`);
+      throw error;
+    }
+  }
+};
 
 export {
   parseUtilityClassesYaml,
@@ -470,6 +429,7 @@ export {
   generateUtilityClassesCSS,
   generateUtilityClassesFromYaml,
   logger,
-  vitePluginUtilityClasses
+  vitePluginUtilityClasses,
+  utilityClassesIndexer
 };
-//# sourceMappingURL=chunk-VK7AH4TD.mjs.map
+//# sourceMappingURL=chunk-FVENPEXG.mjs.map

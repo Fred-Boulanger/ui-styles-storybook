@@ -9,6 +9,7 @@ Generate Storybook utility classes stories from `*.ui_styles.yml` files.
 - Supports multiple namespaces
 - Hot reload support for style file changes
 - Supports both individual stories and autodocs mode
+- No file generation - stories are created on-the-fly from YAML files
 
 ## Installation
 
@@ -52,7 +53,7 @@ export default {
 
 ### Using with Namespaces
 
-If you're using namespaces in your Storybook configuration, you can pass them to the plugin to search for utility style files in those directories:
+If you're using namespaces in your Storybook configuration, you can pass them to the plugin (optional, as files are discovered automatically via the indexer):
 
 ```typescript
 // .storybook/main.ts
@@ -67,8 +68,7 @@ export default {
       namespaces: {
         'custom-theme': resolve('../../../themes/custom/custom-theme'),
         'base-theme': resolve('../../../themes/custom/base-theme'),
-      },
-      outputDir: 'stories'
+      }
     })],
   }),
 }
@@ -77,6 +77,28 @@ export default {
 The plugin will automatically search for `*.ui_styles.yml` files in:
 - The current working directory
 - All namespace directories you specify
+
+### Using with Indexer
+
+The plugin also provides an indexer for Storybook to automatically discover `.ui_styles.yml` files:
+
+```typescript
+// .storybook/main.ts
+import { utilityClassesIndexer } from '@fredboulanger/ui-styles-storybook/main'
+import type { StorybookConfig } from '@storybook/html-vite'
+
+export default {
+  // ... other config
+  experimental_indexers: async (existingIndexers) => [
+    ...(existingIndexers || []),
+    utilityClassesIndexer,
+  ],
+}
+```
+
+## How It Works
+
+The plugin uses Vite's `load()` hook to transform `.ui_styles.yml` files into Storybook stories on-the-fly. No files are written to disk - stories are generated dynamically when Storybook loads the YAML files.
 
 ## Utility Style File Format
 
@@ -101,16 +123,15 @@ spacing_margin:
 
 ## Generated Output
 
-The plugin generates:
-- Story files: `utility-classes.{namespace}.stories.js` in the output directory
-- CSS file: `utility-classes.css` with demo styles
+The plugin generates stories dynamically from `.ui_styles.yml` files:
+- Stories are created on-the-fly when Storybook loads the YAML files
+- CSS styles are included inline in each story
+- No files are written to disk
+- Stories appear in Storybook's navigation under `{namespace}/Utility Classes`
 
 ## Options
 
-- `outputDir`: Output directory for generated stories (default: `'stories'`)
-- `namespaces`: Record of namespace names to directory paths
-- `generateOnStart`: Whether to generate on build start (default: `true`)
-- `watch`: Whether to watch for file changes (default: `true`)
+- `namespaces`: Record of namespace names to directory paths (optional, files are discovered automatically via the indexer)
 
 ## License
 

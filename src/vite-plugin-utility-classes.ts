@@ -1,13 +1,12 @@
 import type { Plugin } from 'vite'
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
-import { join, dirname, extname } from 'path'
+import type { Indexer, IndexInput } from 'storybook/internal/types'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { parse as parseYaml } from 'yaml'
-import { globSync } from 'glob'
 import { logger } from './logger.js'
 import { 
   generateUtilityClassesCSS, 
   generateStory, 
-  generatePreviewHtml,
   generateBaseStoryStructure,
   generateAutodocsContent,
   generateIndividualStoriesContent
@@ -15,40 +14,6 @@ import {
 
 // Helper function to capitalize strings
 const capitalize = (str: string) => str[0].toUpperCase() + str.slice(1)
-
-// Helper function to convert snake_case to Title Case
-const toTitleCase = (str: string) => str.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-
-// Find all *.ui_styles.yml files in the project
-const findUtilityStyleFiles = (rootDir: string, namespaces?: Record<string, string>): string[] => {
-  try {
-    const files: string[] = []
-    
-    // Search in current directory
-    const pattern = join(rootDir, '**', '*.ui_styles.yml')
-    const currentFiles = globSync(pattern)
-    files.push(...currentFiles)
-    
-    // Search in namespaces if provided
-    if (namespaces) {
-      for (const [namespaceName, namespacePath] of Object.entries(namespaces)) {
-        try {
-          const namespacePattern = join(namespacePath, '**', '*.ui_styles.yml')
-          const namespaceFiles = globSync(namespacePattern)
-          files.push(...namespaceFiles)
-          logger.info(`🔍 Found ${namespaceFiles.length} utility style file(s) in namespace '${namespaceName}'`)
-        } catch (error) {
-          logger.warn(`⚠️  Could not search in namespace '${namespaceName}': ${namespacePath}`)
-        }
-      }
-    }
-    
-    return files
-  } catch (error) {
-    logger.warn(`Error searching for *.ui_styles.yml files: ${error}`)
-    return []
-  }
-}
 
 // Determine if a config entry is a utility definition
 const isUtilityDefinition = (value: any): boolean => {
@@ -61,9 +26,8 @@ const isUtilityDefinition = (value: any): boolean => {
 }
 
 // Derive namespace from YAML file path
-const deriveNamespaceFromPath = (rootDir: string, yamlPath: string): string => {
-  const rel = yamlPath.startsWith(rootDir) ? yamlPath.slice(rootDir.length + 1) : yamlPath
-  const parts = rel.split('/')
+const deriveNamespaceFromPath = (yamlPath: string): string => {
+  const parts = yamlPath.split('/')
   // Prefer parent directory name as namespace; fallback to filename without extension(s)
   if (parts.length > 1) {
     return parts[parts.length - 2]
@@ -93,192 +57,169 @@ const isConfigDisabled = (config: Record<string, any>): boolean => {
   )
 }
 
+// Generate story content from a ui_styles.yml file
+const generateUtilityClassesStory = (filePath: string): string => {
+  try {
+    if (!filePath.endsWith('.ui_styles.yml')) {
+      return ''
+    }
+
+    const fileContent = readFileSync(filePath, 'utf8')
+    const config = parseYaml(fileContent) as Record<string, any>
+
+    // Respect disable flags in the config
+    if (isConfigDisabled(config)) {
+      logger.info(`Skipping utility classes generation for disabled file: ${filePath}`)
+      return ''
+    }
+
+    // Extract only utility definition entries from this file
+    const utilities = Object.entries(config)
+      .filter(([, value]) => isUtilityDefinition(value))
+
+    if (utilities.length === 0) {
+      logger.info(`No utility definitions found in ${filePath}`)
+      return ''
+    }
+
+    const namespace = deriveNamespaceFromPath(filePath)
+
+    // Global autodocs tags from thirdPartySettings per YAML file
+    const tps = config?.thirdPartySettings || {}
+    const sdcStorybook = tps?.sdcStorybook || {}
+    const globalTags: string[] = Array.isArray(sdcStorybook?.tags) ? sdcStorybook.tags : []
+    const hasAutodocs = globalTags.includes('autodocs')
+
+    // Include CSS in the story content
+    const cssContent = generateUtilityClassesCSS()
+
+    let storiesContent: string
+
+    if (hasAutodocs) {
+      // Generate simple docs definition without individual stories
+      const docsContent = generateAutodocsContent(utilities)
+      storiesContent = generateBaseStoryStructure(
+        '// Auto-generated utility classes documentation', 
+        docsContent, 
+        filePath, 
+        namespace
+      )
+    } else {
+      // Generate individual stories (original behavior)
+      const stories = generateIndividualStoriesContent(utilities, namespace)
+      storiesContent = generateBaseStoryStructure(
+        '// Auto-generated utility classes stories', 
+        stories, 
+        filePath, 
+        namespace
+      )
+    }
+
+    // Include CSS in the story content (will be injected in render functions)
+    // For now, return just the stories content - CSS will be handled in previewHead or in each story render
+    return storiesContent
+  } catch (error) {
+    logger.error(`Error generating utility classes story from ${filePath}: ${error}`)
+    throw error
+  }
+}
+
 export interface UtilityClassesPluginOptions {
-  /**
-   * Output directory for generated stories
-   * @default 'stories'
-   */
-  outputDir?: string
-  
   /**
    * Namespaces to search for utility style files
    */
   namespaces?: Record<string, string>
-  
-  /**
-   * Whether to generate on build start
-   * @default true
-   */
-  generateOnStart?: boolean
-  
-  /**
-   * Whether to watch for file changes
-   * @default true
-   */
-  watch?: boolean
 }
 
 /**
  * Vite plugin for automatic utility classes generation from *.ui_styles.yml files
  */
 export default function vitePluginUtilityClasses(options: UtilityClassesPluginOptions = {}): Plugin {
-  const {
-    outputDir,
-    namespaces,
-    generateOnStart = true,
-    watch = true
-  } = options
-
-  let hasGenerated = false
-
-  const generateUtilityClasses = () => {
-    const rootDir = process.cwd()
-    const finalOutputDir = outputDir || join(rootDir, 'stories')
-    
-    // Find all *.ui_styles.yml files
-    const yamlFiles = findUtilityStyleFiles(rootDir, namespaces)
-    
-    if (yamlFiles.length === 0) {
-      logger.warn(`No *.ui_styles.yml files found in project`)
-      return
-    }
-
-    try {
-      logger.info(`Found ${yamlFiles.length} utility style file(s): ${yamlFiles.join(', ')}`)
-
-      // Clean legacy combined stories file if present
-      const legacyStoriesPath = join(finalOutputDir, 'utility-classes.stories.js')
-      if (existsSync(legacyStoriesPath)) {
-        try { unlinkSync(legacyStoriesPath) } catch {}
-      }
-
-      let numGenerated = 0
-      let wroteCss = false
-
-      // Process each YAML file individually (no merging)
-      yamlFiles.forEach(yamlPath => {
-        if (!existsSync(yamlPath)) return
-        
-        const fileContent = readFileSync(yamlPath, 'utf8')
-        const config = parseYaml(fileContent) as Record<string, any>
-
-        // Respect disable flags in the config
-        if (isConfigDisabled(config)) {
-          logger.info(`Skipping utility classes generation for disabled file: ${yamlPath}`)
-          // Remove previously generated file for this namespace, if exists
-          const ns = deriveNamespaceFromPath(rootDir, yamlPath)
-          const perFileStoriesPath = join(finalOutputDir, `utility-classes.${ns}.stories.js`)
-          try { if (existsSync(perFileStoriesPath)) unlinkSync(perFileStoriesPath) } catch {}
-          return
-        }
-
-        // Extract only utility definition entries from this file
-        const utilities = Object.entries(config)
-          .filter(([, value]) => isUtilityDefinition(value))
-
-        if (utilities.length === 0) {
-          logger.info(`No utility definitions found in ${yamlPath}`)
-          return
-        }
-
-        const namespace = deriveNamespaceFromPath(rootDir, yamlPath)
-
-        // Global autodocs tags from thirdPartySettings per YAML file
-        const tps = (config as any)?.thirdPartySettings || {}
-        const sdcStorybook = tps?.sdcStorybook || {}
-        const globalTags: string[] = Array.isArray(sdcStorybook?.tags) ? sdcStorybook.tags : []
-        const hasAutodocs = globalTags.includes('autodocs')
-
-        let storiesContent: string
-
-        if (hasAutodocs) {
-          // Generate simple docs definition without individual stories
-          const docsContent = generateAutodocsContent(utilities)
-          storiesContent = generateBaseStoryStructure(
-            '// Auto-generated utility classes documentation', 
-            docsContent, 
-            yamlPath, 
-            namespace
-          )
-        } else {
-          // Generate individual stories (original behavior)
-          const stories = generateIndividualStoriesContent(utilities, namespace)
-          storiesContent = generateBaseStoryStructure(
-            '// Auto-generated utility classes stories', 
-            stories, 
-            yamlPath, 
-            namespace
-          )
-        }
-
-        const storiesPath = join(finalOutputDir, `utility-classes.${namespace}.stories.js`)
-        writeFileSync(storiesPath, storiesContent, 'utf8')
-        numGenerated += 1
-        logger.info(`✅ Generated utility classes stories: ${storiesPath}`)
-
-        // Generate CSS only once (shared across all namespaces)
-        if (!wroteCss) {
-          const cssContent = generateUtilityClassesCSS()
-          const cssPath = join(finalOutputDir, 'utility-classes.css')
-          writeFileSync(cssPath, cssContent, 'utf8')
-          logger.info(`✅ Generated utility classes CSS: ${cssPath}`)
-          wroteCss = true
-        }
-      })
-
-      if (numGenerated === 0) {
-        logger.warn(`No valid utility style configurations found`)
-        // Cleanup shared CSS if present
-        const cssPath = join(finalOutputDir, 'utility-classes.css')
-        try { if (existsSync(cssPath)) unlinkSync(cssPath) } catch {}
-      } else {
-        logger.info(`✅ Processed ${numGenerated} utility style file(s) individually`)
-      }
-
-    } catch (error) {
-      logger.error(`❌ Failed to generate utility classes stories: ${error}`)
-      throw error
-    }
-  }
-
   return {
     name: 'vite-plugin-utility-classes',
     
-    buildStart() {
-      if (generateOnStart && !hasGenerated) {
-        try {
-          generateUtilityClasses()
-          hasGenerated = true
-        } catch (error) {
-          logger.warn('Failed to generate utility classes on build start:', error)
-        }
-      }
-    },
-
     async load(id: string) {
-      // Generate utility classes when loading any component.yml file
-      if (id.endsWith('component.yml') && !hasGenerated) {
-        try {
-          generateUtilityClasses()
-          hasGenerated = true
-        } catch (error) {
-          logger.warn('Failed to generate utility classes:', error)
+      if (!id.endsWith('.ui_styles.yml')) return
+
+      try {
+        logger.info(`Processing utility classes file: ${id}`)
+        
+        const storyContent = generateUtilityClassesStory(id)
+        
+        if (!storyContent) {
+          logger.info(`No story content generated for ${id}`)
+          return ''
         }
+        
+        return storyContent
+      } catch (error) {
+        logger.error(`Error loading utility classes file: ${id}, ${error}`)
+        throw error
       }
     },
-
-    async handleHotUpdate({ file }) {
-      // Regenerate utility classes when style files change
-      if (watch && file.endsWith('.ui_styles.yml')) {
-        try {
-          generateUtilityClasses()
-          logger.info('🎨 Utility classes regenerated due to file change:', file)
-        } catch (error) {
-          logger.warn('Failed to regenerate utility classes:', error)
-        }
-      }
-    }
   }
 }
 
+// Indexer for UI Styles YAML files
+export const utilityClassesIndexer: Indexer = {
+  test: /\.ui_styles\.yml$/,
+  createIndex: async (fileName, { makeTitle }) => {
+    try {
+      const content = parseYaml(readFileSync(fileName, 'utf8')) as any
+      
+      if (isConfigDisabled(content)) {
+        logger.info(`Utility classes file ${fileName} is disabled, skipping index`)
+        return []
+      }
 
+      // Extract utilities to determine if there's content
+      const utilities = Object.entries(content)
+        .filter(([, value]) => isUtilityDefinition(value))
+
+      if (utilities.length === 0) {
+        return []
+      }
+
+      const namespace = deriveNamespaceFromPath(fileName)
+      
+      // Check if autodocs mode
+      const tps = content?.thirdPartySettings || {}
+      const sdcStorybook = tps?.sdcStorybook || {}
+      const globalTags: string[] = Array.isArray(sdcStorybook?.tags) ? sdcStorybook.tags : []
+      const hasAutodocs = globalTags.includes('autodocs')
+      
+      const tags = ['utility-classes']
+      
+      if (hasAutodocs) {
+        // Return single entry for autodocs mode
+        const baseTitle = makeTitle(`${namespace}/Utility Classes`)
+        return [{
+          type: 'story' as const,
+          importPath: fileName,
+          exportName: 'Docs',
+          title: baseTitle,
+          tags: [...tags, 'autodocs'],
+        }]
+      } else {
+        // Return one entry per utility group for individual stories mode
+        return utilities.map(([groupKey, definition]: [string, any]) => {
+          if (definition.enabled === false) {
+            return null
+          }
+          const { category, label } = definition
+          const baseTitle = makeTitle(`${namespace}/Utility Classes/${category}/${label}`)
+          return {
+            type: 'story' as const,
+            importPath: fileName,
+            exportName: groupKey,
+            title: baseTitle,
+            tags,
+          }
+        }).filter(Boolean) as any[]
+      }
+    } catch (error) {
+      logger.error(`Error creating index for utility classes file: ${fileName}, ${error}`)
+      throw error
+    }
+  },
+}

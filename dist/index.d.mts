@@ -1,5 +1,6 @@
-export { U as UtilityClassesPluginOptions, v as vitePluginUtilityClasses } from './main-G0VfSUXD.mjs';
+export { U as UtilityClassesPluginOptions, u as utilityClassesIndexer, v as vitePluginUtilityClasses } from './main-efjlhqP_.mjs';
 import 'vite';
+import 'storybook/internal/types';
 
 interface UtilityClassDefinition {
     category: string;

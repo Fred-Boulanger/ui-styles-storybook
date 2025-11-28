@@ -1,8 +1,10 @@
 "use client"
 import {
+  utilityClassesIndexer,
   vitePluginUtilityClasses
-} from "./chunk-VK7AH4TD.mjs";
+} from "./chunk-FVENPEXG.mjs";
 export {
+  utilityClassesIndexer,
   vitePluginUtilityClasses
 };
 //# sourceMappingURL=main.mjs.map

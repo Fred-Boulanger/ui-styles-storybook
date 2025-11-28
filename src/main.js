@@ -3,9 +3,9 @@
  * This file provides the necessary exports for Storybook configuration
  */
 
-import vitePluginUtilityClasses from './vite-plugin-utility-classes.js'
+import vitePluginUtilityClasses, { utilityClassesIndexer } from './vite-plugin-utility-classes.js'
 
-// Export the plugin for use in Storybook configuration
-export { vitePluginUtilityClasses }
+// Export the plugin and indexer for use in Storybook configuration
+export { vitePluginUtilityClasses, utilityClassesIndexer }
 
 
