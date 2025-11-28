@@ -1,0 +1,1 @@
+{"version":3,"sources":["../src/utils.ts"],"sourcesContent":["/**\n * Utility functions for ui-styles-storybook\n */\n\nexport const capitalize = (str: string) => str[0].toUpperCase() + str.slice(1)\n\n\n"],"mappings":";;;;;;;;;;;;;;;;AAIO,IAAM,aAAa,CAAC,QAAgB,IAAI,CAAC,EAAE,YAAY,IAAI,IAAI,MAAM,CAAC;","names":[]}

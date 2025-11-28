@@ -65,8 +65,8 @@ export default {
     ...config,
     plugins: [...(config.plugins || []), vitePluginUtilityClasses({
       namespaces: {
-        'malakoff_humanis': resolve('../../../themes/custom/malakoff_humanis'),
-        'ui_suite_cbd': resolve('../../../themes/custom/ui_suite_cbd'),
+        'custom-theme': resolve('../../../themes/custom/custom-theme'),
+        'base-theme': resolve('../../../themes/custom/base-theme'),
       },
       outputDir: 'stories'
     })],
@@ -115,3 +115,4 @@ The plugin generates:
 ## License
 
 MIT
+
