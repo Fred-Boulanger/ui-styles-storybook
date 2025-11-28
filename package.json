@@ -1,6 +1,6 @@
 {
   "name": "@fredboulanger/ui-styles-storybook",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generate Storybook utility classes stories from *.ui_styles.yml files",
   "main": "dist/index.mjs",
   "module": "dist/index.mjs",
@@ -63,5 +63,3 @@
     "node": ">=18.0.0"
   }
 }
-
-
